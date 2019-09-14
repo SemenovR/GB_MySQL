@@ -15,5 +15,17 @@ GRANT ALL ON shop.* TO shop;
 # таблицы accounts, предоставляющий доступ к столбца id и name. Создайте пользователя user_read, 
 # который бы не имел доступа к таблице accounts, однако, мог бы извлекать записи из представления username.
 
+CREATE TABLE IF NOT EXISTS accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  password VARCHAR(255)
+);
 
+CREATE OR REPLACE VIEW username
+AS SELECT id, name 
+     FROM accounts;
+
+CREATE USER user_read;
+GRANT USAGE ON shop.accounts TO user_read;
+GRANT SELECT ON shop.username TO user_read;
 
