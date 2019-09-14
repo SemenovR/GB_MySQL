@@ -11,15 +11,12 @@ SELECT m.from_user_id,
           ON u.id = m.from_user_id
        LEFT JOIN friendship f1 
          ON f1.friend_id = m.from_user_id 
-        AND f1.user_id = 10 
-        AND f1.confirmed_at IS NOT NULL 
-        AND f1.status IS NOT NULL
        LEFT JOIN friendship f2 
          ON f2.user_id = m.from_user_id 
-        AND f2.friend_id = 10 
-        AND f2.confirmed_at IS NOT NULL 
-        AND f2.status IS NOT NULL
   WHERE m.to_user_id = 10
+    AND COALESCE(f1.user_id, f2.friend_id) = 10
+    AND COALESCE(f1.confirmed_at, f2.confirmed_at) IS NOT NULL 
+    AND COALESCE(f1.status, f2.status) IS NOT NULL 
   GROUP BY from_user_id
   ORDER BY cnt DESC
   LIMIT 1;
