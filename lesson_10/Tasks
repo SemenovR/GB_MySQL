@@ -1,0 +1,162 @@
+# 1. Проанализировать какие запросы могут выполняться наиболее часто в процессе работы приложения и  
+# добавить необходимые индексы.
+
+# В большинстве случаев нужные индексы создались автоматически при указании ключей, внешних ключей и 
+# уникальных полей. 
+
+# Но есть одно поле, которое было пропущено - это item_id в таблице likes.
+# Это поле по идее должно довольно часто использоваться. Например при отображении лайков в ленте
+# новостей. Как правило выборка такого рода лайков будет происходить для определённого пользователя
+# и для определённого типа лайка. Поэтому можно создать составной индекс.
+CREATE INDEX likes_user_id_like_type_id_item_id_idx ON likes(user_id, like_type_id, item_id);
+
+# Ещё один составной индекс можно создать для таблицы users на поля lastname и firstname.
+# Он будет полезен, когда пользователи будут искать друзей по фамилии и имени.
+# Делать отдельно индекс только по имени без предварительного анализа думаю не стоит, т.к.
+# теоретически, вряд ли кто-то будет искать человека только по имени. Причём в большинстве 
+# случаев будут искать сначала по фамилии и потом возможно ещё по имени, 
+# поэтому сначала в индексе идёт фамилия, а потом имя
+CREATE INDEX users_lastname_firstname_idx ON users(lastname, firstname);
+
+# Если в запросах будут использоваться не идентифиакторы, а названия типов лайков и типов медиа, 
+# то можно создать для них индексы. Эти таблицы небольшие, поэтому индексы много места не займут
+# и лишними не будут. 
+# Кроме того, предлагаю воспользоваться хитростью - создать индекс не просто для названия типов,
+# а на сочетание название+идентификатор. 
+# Для примера рассмотрим media_types. Эта хитрость нужна чтобы СУБД, после того как нашла в индексе 
+# нужное значение name, не шла искать соответствующий id в media_types, а взяла значение id прямо
+# из индекса. Т.е. при поиске id по name будет происходить только обращение к индексу,
+# а к самой таблице media_types не будет.
+CREATE UNIQUE INDEX media_types_name_id_idx ON media_types(name, id);
+CREATE UNIQUE INDEX like_types_name_id_idx ON like_types(name, id);
+
+# 2. Задание на денормализацию
+# Разобраться как построен и работает следующий запрос:
+
+SELECT SUM(count) AS overall 
+  FROM (SELECT CONCAT(u.firstname, ' ', u.lastname) AS user, 
+               COUNT(l.id) as count, 
+               TIMESTAMPDIFF(YEAR, p.birthday, NOW()) AS age
+          FROM users AS u
+               INNER JOIN profiles AS p
+                  ON p.user_id = u.id
+                LEFT JOIN media as m
+                  ON m.user_id = u.id
+                LEFT JOIN messages as t
+                  ON t.from_user_id = u.id
+                LEFT JOIN likes AS l
+                  ON l.item_id = u.id AND l.like_type_id = 2
+                  OR l.item_id = m.id AND l.like_type_id = 1
+                  OR l.item_id = t.id AND l.like_type_id = 3
+         GROUP BY u.id
+         ORDER BY p.birthday DESC
+         LIMIT 10
+       ) AS likes;
+
+# Правильно-ли он построен?
+
+# 1. По идее мы считали лайки не на сообщения, а на посты, поэтому вместо таблицы messages, 
+# должна быть posts
+# 2. В операторе COUNT не хватает DISTINCT для подсчёта идентификаторов лайков.
+# Т.к. при нескольких операциях JOIN однин и тот же лайк может задублироваться.
+# Думаю что вот так будет правильнее.
+SELECT SUM(count) AS overall 
+  FROM (SELECT CONCAT(u.firstname, ' ', u.lastname) AS user, 
+               COUNT(DISTINCT l.id) as count, 
+               TIMESTAMPDIFF(YEAR, p.birthday, NOW()) AS age
+          FROM users AS u
+               INNER JOIN profiles AS p
+                  ON p.user_id = u.id
+                LEFT JOIN media as m
+                  ON m.user_id = u.id
+                LEFT JOIN posts as o
+                  ON o.user_id = u.id
+                LEFT JOIN likes AS l
+                  ON l.item_id = u.id AND l.like_type_id = 2
+                  OR l.item_id = m.id AND l.like_type_id = 1
+                  OR l.item_id = o.id AND l.like_type_id = 3
+         GROUP BY u.id
+         ORDER BY p.birthday DESC
+         LIMIT 10
+       ) AS likes;
+
+# Какие изменения, включая денормализацию, можно внести в структуру БД
+# чтобы существенно повысить скорость работы этого запроса?
+
+# Во-первых, достаточно добавить идентификатор пользовтеля, которому ставится лайк, в таблицу likes.
+# Пусть это будет поле item_user_id, тогда запрос можно переписать следующим образом.
+SELECT SUM(count) AS overall 
+  FROM (SELECT CONCAT(u.firstname, ' ', u.lastname) AS user, 
+               COUNT(DISTINCT l.id) as count, 
+               TIMESTAMPDIFF(YEAR, p.birthday, NOW()) AS age
+          FROM users AS u
+               INNER JOIN profiles AS p
+                  ON p.user_id = u.id
+                LEFT JOIN likes AS l
+                  ON l.item_user_id = u.id 
+                 AND l.like_type_id IN (1, 2, 3)
+         GROUP BY u.id
+         ORDER BY p.birthday DESC
+         LIMIT 10
+       ) AS likes;
+
+# Во-вторых, если таблица лайков очень большая, а выводить количество лайков нужно часто и быстро,
+# то в профиле пользователя можно завести счётчик лайков, который будет изменяться по триггеру
+# на вставку/изменение/удаление таблицы likes.
+CREATE TRIGGER likes_insert BEFORE INSERT ON likes
+FOR EACH ROW
+BEGIN
+  UPDATE profiles
+     SET like_count = like_count + 1 
+   WHERE user_id = NEW.item_user_id; 
+END;
+     
+CREATE TRIGGER likes_update BEFORE UPDATE ON likes
+FOR EACH ROW
+BEGIN
+  UPDATE profiles
+     SET like_count = like_count - 1 
+   WHERE user_id = OLD.item_user_id; 
+
+  UPDATE profiles
+     SET like_count = like_count + 1 
+   WHERE user_id = NEW.item_user_id; 
+END;
+
+CREATE TRIGGER likes_delete BEFORE DELETE ON likes
+FOR EACH ROW
+BEGIN
+  UPDATE profiles
+     SET like_count = like_count - 1 
+   WHERE user_id = OLD.item_user_id; 
+END;
+
+# Тогда запрос станет таким.
+SELECT SUM(count) AS overall 
+  FROM (SELECT CONCAT(u.firstname, ' ', u.lastname) AS user, 
+               p.like_count AS count, 
+               TIMESTAMPDIFF(YEAR, p.birthday, NOW()) AS age
+          FROM users AS u
+               INNER JOIN profiles AS p
+                  ON p.user_id = u.id
+         ORDER BY p.birthday DESC
+         LIMIT 10
+       ) AS likes;
+
+# В-третьих, если и это будет тормозить, то можно соединить таблицу users и profiles 
+# в одну таблицу, тогда мы вообще избавимся от JOINов. Получится такой запрос.
+SELECT SUM(count) AS overall 
+  FROM (SELECT CONCAT(firstname, ' ', lastname) AS user, 
+               like_count AS count, 
+               TIMESTAMPDIFF(YEAR, birthday, NOW()) AS age
+          FROM users 
+         ORDER BY birthday DESC
+         LIMIT 10
+       ) AS likes;
+
+# В-четвёртых, если и этого будет мало, то можно запланировать задание, которое будет 
+# записывать в таблицу (пусть это будет like_calculate), состоящую из одного поля и одной строки, 
+# значение вычисленное предыдущим запросом. Но в этом случае мы теряем в точности, 
+# т.к. в момент получения значения из таблицы like_calculate реальное значение в таблице likes 
+# уже может измениться.
+
