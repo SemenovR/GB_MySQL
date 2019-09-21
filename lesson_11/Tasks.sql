@@ -44,6 +44,81 @@ DELIMITER ;
 
 # 2. (по желанию) Создайте SQL-запрос, который помещает в таблицу users миллион записей.
  
+INSERT INTO users (name)
+  SELECT CONCAT('Имя_', t1.f, t2.f, t3.f, t4.f, t5.f, t6.f) AS name
+    FROM (
+          SELECT 0 AS f UNION ALL
+          SELECT 1 UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9
+         ) AS t1,
+         (
+          SELECT 0 AS f UNION ALL
+          SELECT 1 UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9
+         ) AS t2,
+         (
+          SELECT 0 AS f UNION ALL
+          SELECT 1 UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9
+         ) AS t3,
+         (
+          SELECT 0 AS f UNION ALL
+          SELECT 1 UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9
+         ) AS t4,
+         (
+          SELECT 0 AS f UNION ALL
+          SELECT 1 UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9
+         ) AS t5,
+         (
+          SELECT 0 AS f UNION ALL
+          SELECT 1 UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9
+         ) AS t6;
+
 
 # Тема 10 “NoSQL”
 # 1. В базе данных Redis подберите коллекцию для подсчета посещений с определенных IP-адресов.
